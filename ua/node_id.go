@@ -91,6 +91,19 @@ func MustParseNodeID(s string) *NodeID {
 	return id
 }
 
+// NSUResolver resolves a namespace URL to a namespace id.
+type NSUResolver interface {
+	Resolve(nsu string) (uint16, error)
+}
+
+// NSUResolverFunc is a helper type to use a function to implement
+// an NSUResolver.
+type NSUResolverFunc func(nsu string) (uint16, error)
+
+func (f NSUResolverFunc) Resolve(nsu string) (uint16, error) {
+	return f(nsu)
+}
+
 // ParseNodeID returns a node id from a string definition of the format
 // 'ns=<namespace>;{s,i,b,g}=<identifier>'.
 //
@@ -99,8 +112,22 @@ func MustParseNodeID(s string) *NodeID {
 // For numeric ids the smallest possible type which can store the namespace
 // and id value is returned.
 //
-// Namespace URLs 'nsu=' are not supported since they require a lookup.
+// Use ResolveNodeID for ids with a namespace URL.
 func ParseNodeID(s string) (*NodeID, error) {
+	return ResolveNodeID(s, nil)
+}
+
+// ResolveNodeID returns a node id from a string definition of the format
+// 'ns=<namespace>;{s,i,b,g}=<identifier>'.
+//
+// For string node ids the 's=' prefix can be omitted.
+//
+// For numeric ids the smallest possible type which can store the namespace
+// and id value is returned.
+//
+// If the id contains a namespace URL (nsu=) then you need to provide a
+// resolver function.
+func ResolveNodeID(s string, r NSUResolver) (*NodeID, error) {
 	if s == "" {
 		return NewTwoByteNodeID(0), nil
 	}
@@ -121,7 +148,15 @@ func ParseNodeID(s string) (*NodeID, error) {
 	var ns uint16
 	switch {
 	case strings.HasPrefix(nsval, "nsu="):
-		return nil, errors.Errorf("namespace urls are not supported: %s", s)
+		nsuval := strings.TrimPrefix(nsval, "nsu=")
+		if r == nil {
+			return nil, errors.Errorf("no resolver to lookup %s", nsval)
+		}
+		var err error
+		ns, err = r.Resolve(nsuval)
+		if err != nil {
+			return nil, errors.Errorf("failed to resolve %s: %v", nsval, err)
+		}
 
 	case strings.HasPrefix(nsval, "ns="):
 		n, err := strconv.Atoi(nsval[3:])
