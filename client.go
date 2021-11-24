@@ -960,6 +960,21 @@ func (c *Client) HistoryReadRawModified(nodes []*ua.HistoryReadValueID, details 
 	return res, err
 }
 
+// NamespaceArray returns the list of namespaces registered on the server.
+func (c *Client) NamespaceArray() ([]string, error) {
+	node := c.Node(ua.NewNumericNodeID(0, id.Server_NamespaceArray))
+	v, err := node.Value()
+	if err != nil {
+		return nil, err
+	}
+
+	ns, ok := v.Value().([]string)
+	if !ok {
+		return nil, errors.Errorf("error fetching namespace array. id=%d, type=%T", v.Type(), v.Value())
+	}
+	return ns, nil
+}
+
 // safeAssign implements a type-safe assign from T to *T.
 func safeAssign(t, ptrT interface{}) error {
 	if reflect.TypeOf(t) != reflect.TypeOf(ptrT).Elem() {

@@ -93,14 +93,14 @@ func MustParseNodeID(s string) *NodeID {
 
 // NSUResolver resolves a namespace URL to a namespace id.
 type NSUResolver interface {
-	Resolve(nsu string) (uint16, error)
+	Lookup(nsu string) (uint16, error)
 }
 
 // NSUResolverFunc is a helper type to use a function to implement
 // an NSUResolver.
 type NSUResolverFunc func(nsu string) (uint16, error)
 
-func (f NSUResolverFunc) Resolve(nsu string) (uint16, error) {
+func (f NSUResolverFunc) Lookup(nsu string) (uint16, error) {
 	return f(nsu)
 }
 
@@ -118,7 +118,7 @@ func ParseNodeID(s string) (*NodeID, error) {
 }
 
 // ResolveNodeID returns a node id from a string definition of the format
-// 'ns=<namespace>;{s,i,b,g}=<identifier>'.
+// '{ns,nsu}=<namespace>;{s,i,b,g}=<identifier>'.
 //
 // For string node ids the 's=' prefix can be omitted.
 //
@@ -153,7 +153,7 @@ func ResolveNodeID(s string, r NSUResolver) (*NodeID, error) {
 			return nil, errors.Errorf("no resolver to lookup %s", nsval)
 		}
 		var err error
-		ns, err = r.Resolve(nsuval)
+		ns, err = r.Lookup(nsuval)
 		if err != nil {
 			return nil, errors.Errorf("failed to resolve %s: %v", nsval, err)
 		}
