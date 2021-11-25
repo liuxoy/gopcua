@@ -489,11 +489,25 @@ func (c *Client) Dial(ctx context.Context) error {
 
 	c.sechan, err = uasc.NewSecureChannel(c.endpointURL, c.conn, c.cfg.sechan, c.sechanErr)
 	if err != nil {
-		_ = c.conn.Close()
+		c.conn.Close()
 		return err
 	}
 
-	return c.sechan.Open(ctx)
+	if err := c.sechan.Open(ctx); err != nil {
+		c.conn.Close()
+		return err
+	}
+
+	if !c.cfg.disableNSInit {
+		ns, err := c.NamespaceArray()
+		if err != nil {
+			c.conn.Close()
+			return err
+		}
+		ua.RegisterNodeIDParser(&ua.NamespaceParser{Namespaces: ns})
+	}
+
+	return nil
 }
 
 // Close closes the session and the secure channel.
