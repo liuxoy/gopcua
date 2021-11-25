@@ -11,41 +11,9 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"github.com/gopcua/opcua/errors"
 )
-
-func init() {
-	parser.Store(&NamespaceParser{})
-}
-
-// parser stores the global node id parser.
-// It is guaranteed that there will always be a node id parser.
-var parser atomic.Value // NodeIDParser
-
-// RegisterNodeIDParser configures a new global node id parser.
-func RegisterNodeIDParser(p NodeIDParser) {
-	if p == nil {
-		panic("NodeIDParser must not be nil")
-	}
-	parser.Store(p)
-}
-
-// NodeIDParser defines the interface for a node id parser.
-type NodeIDParser interface {
-	Parse(s string) (*NodeID, error)
-}
-
-// NamespaceParser provides a node id parser which is aware of
-// server namespaces.
-type NamespaceParser struct {
-	Namespaces []string
-}
-
-func (p *NamespaceParser) Parse(s string) (*NodeID, error) {
-	return ResolveNodeID(s, p.Namespaces)
-}
 
 // todo(fs): fix mask
 
@@ -123,14 +91,31 @@ func MustParseNodeID(s string) *NodeID {
 	return id
 }
 
-// ParseNodeID parses string definitions of node ids with the
-// configured node id parser. It is using the `NamespaceParser`
-// if no other parser has been specified.
+// ParseNodeID returns a node id from a string definition of the format
+// 'ns=<namespace>;{s,i,b,g}=<identifier>'.
+//
+// The 's=' prefix can be omitted for string node ids in namespace 0.
+//
+// For numeric ids the smallest possible type which can store the namespace
+// and id value is returned.
+//
+// Namespace URIs are not supported since NodeID cannot store them. If you need
+// to support namespace URIs use ParseExpandedNodeID.
 func ParseNodeID(s string) (*NodeID, error) {
-	return parser.Load().(NodeIDParser).Parse(s)
+	id, err := ParseExpandedNodeID(s, nil)
+	if err != nil {
+		return nil, err
+	}
+	if id.HasNamespaceURI() {
+		return nil, errors.Errorf("namespace uris are not supported")
+	}
+	if id.HasServerIndex() {
+		return nil, errors.Errorf("server index is not supported")
+	}
+	return id.NodeID, nil
 }
 
-// ResolveNodeID returns a node id from a string definition of the format
+// ParseExpandedNodeID returns a node id from a string definition of the format
 // '{ns,nsu}=<namespace>;{s,i,b,g}=<identifier>'.
 //
 // The 's=' prefix can be omitted for string node ids in namespace 0.
@@ -139,9 +124,9 @@ func ParseNodeID(s string) (*NodeID, error) {
 // and id value is returned.
 //
 // Namespace URIs are resolved to ids from the provided list of namespaces.
-func ResolveNodeID(s string, ns []string) (*NodeID, error) {
+func ParseExpandedNodeID(s string, ns []string) (*ExpandedNodeID, error) {
 	if s == "" {
-		return NewTwoByteNodeID(0), nil
+		return NewTwoByteExpandedNodeID(0), nil
 	}
 
 	var nsval, idval string
@@ -158,13 +143,14 @@ func ResolveNodeID(s string, ns []string) (*NodeID, error) {
 
 	// parse namespace
 	var nsid uint16
+	var nsu string
 	switch {
 	case strings.HasPrefix(nsval, "nsu="):
 		nsuval := strings.TrimPrefix(nsval, "nsu=")
 		ok := false
 		for id, uri := range ns {
 			if uri == nsuval {
-				nsid = uint16(id)
+				nsid, nsu = uint16(id), uri
 				ok = true
 				break
 			}
@@ -196,37 +182,37 @@ func ResolveNodeID(s string, ns []string) (*NodeID, error) {
 		}
 		switch {
 		case nsid == 0 && id < 256:
-			return NewTwoByteNodeID(byte(id)), nil
+			return NewExpandedNodeID(NewTwoByteNodeID(byte(id)), "", 0), nil
 		case nsid < 256 && id < math.MaxUint16:
-			return NewFourByteNodeID(byte(nsid), uint16(id)), nil
+			return NewExpandedNodeID(NewFourByteNodeID(byte(nsid), uint16(id)), nsu, 0), nil
 		case id <= math.MaxUint32:
-			return NewNumericNodeID(nsid, uint32(id)), nil
+			return NewExpandedNodeID(NewNumericNodeID(nsid, uint32(id)), nsu, 0), nil
 		default:
 			return nil, errors.Errorf("numeric id out of range (0..2^32-1): %s", s)
 		}
 
 	case strings.HasPrefix(idval, "s="):
-		return NewStringNodeID(nsid, idval[2:]), nil
+		return NewExpandedNodeID(NewStringNodeID(nsid, idval[2:]), nsu, 0), nil
 
 	case strings.HasPrefix(idval, "g="):
 		n := NewGUIDNodeID(nsid, idval[2:])
 		if n == nil || n.StringID() == "" {
 			return nil, errors.Errorf("invalid guid node id: %s", s)
 		}
-		return n, nil
+		return NewExpandedNodeID(n, nsu, 0), nil
 
 	case strings.HasPrefix(idval, "b="):
 		b, err := base64.StdEncoding.DecodeString(idval[2:])
 		if err != nil {
 			return nil, errors.Errorf("invalid opaque node id: %s", s)
 		}
-		return NewByteStringNodeID(nsid, b), nil
+		return NewExpandedNodeID(NewByteStringNodeID(nsid, b), nsu, 0), nil
 
 	case strings.HasPrefix(idval, "ns="):
 		return nil, errors.Errorf("invalid node id: %s", s)
 
 	default:
-		return NewStringNodeID(nsid, idval), nil
+		return NewExpandedNodeID(NewStringNodeID(nsid, idval), nsu, 0), nil
 	}
 }
 
@@ -376,7 +362,7 @@ func (n *NodeID) SetStringID(v string) error {
 }
 
 // String returns the string representation of the NodeID
-// in the format described by ResolveNodeID.
+// in the format described by ParseNodeID.
 func (n *NodeID) String() string {
 	switch n.Type() {
 	case NodeIDTypeTwoByte:

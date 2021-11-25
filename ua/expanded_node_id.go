@@ -20,17 +20,18 @@ func (a ExpandedNodeID) String() string {
 }
 
 // NewExpandedNodeID creates a new ExpandedNodeID.
-func NewExpandedNodeID(hasURI, hasIndex bool, nodeID *NodeID, uri string, idx uint32) *ExpandedNodeID {
+func NewExpandedNodeID(nodeID *NodeID, uri string, idx uint32) *ExpandedNodeID {
 	e := &ExpandedNodeID{
 		NodeID:      nodeID,
 		ServerIndex: idx,
 	}
 
-	if hasURI {
+	if uri != "" {
 		e.NodeID.SetURIFlag()
 		e.NamespaceURI = uri
 	}
-	if hasIndex {
+
+	if idx > 0 {
 		e.NodeID.SetIndexFlag()
 	}
 

@@ -753,13 +753,6 @@ func TestOptions(t *testing.T) {
 				}(),
 			},
 		},
-		{
-			name: `DisableNamespaceInit()`,
-			opt:  DisableNamespaceInit(),
-			cfg: &Config{
-				disableNSInit: true,
-			},
-		},
 	}
 
 	for _, tt := range tests {
