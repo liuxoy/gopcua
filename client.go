@@ -502,7 +502,11 @@ func (c *Client) Dial(ctx context.Context) error {
 		return err
 	}
 
-	return c.UpdateNamespaces()
+	if !c.cfg.disableNamespaceUpdate {
+		return c.UpdateNamespaces()
+	}
+
+	return nil
 }
 
 // Close closes the session and the secure channel.
