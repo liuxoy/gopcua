@@ -107,10 +107,10 @@ func ParseNodeID(s string) (*NodeID, error) {
 		return nil, err
 	}
 	if id.HasNamespaceURI() {
-		return nil, errors.Errorf("namespace uris are not supported")
+		return nil, errors.Errorf("namespace uris are not supported. use `ua.ParseExpandedNodeID`")
 	}
 	if id.HasServerIndex() {
-		return nil, errors.Errorf("server index is not supported")
+		return nil, errors.Errorf("server index is not supported. use `ua.ParseExpandedNodeID`")
 	}
 	return id.NodeID, nil
 }
@@ -146,6 +146,10 @@ func ParseExpandedNodeID(s string, ns []string) (*ExpandedNodeID, error) {
 	var nsu string
 	switch {
 	case strings.HasPrefix(nsval, "nsu="):
+		if ns == nil {
+			return nil, errors.Errorf("namespace urls require a server NamespaceArray")
+		}
+
 		nsuval := strings.TrimPrefix(nsval, "nsu=")
 		ok := false
 		for id, uri := range ns {
@@ -156,7 +160,7 @@ func ParseExpandedNodeID(s string, ns []string) (*ExpandedNodeID, error) {
 			}
 		}
 		if !ok {
-			return nil, errors.Errorf("invalid namespace uri %s", nsval)
+			return nil, errors.Errorf("namespace uri %s not found in the server NamespaceArray %s", nsval, ns)
 		}
 
 	case strings.HasPrefix(nsval, "ns="):
