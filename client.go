@@ -189,13 +189,15 @@ func (c *Client) Connect(ctx context.Context) (err error) {
 	if err := c.Dial(ctx); err != nil {
 		return err
 	}
+
 	s, err := c.CreateSession(c.cfg.session)
 	if err != nil {
-		_ = c.Close()
+		c.Close()
 		return err
 	}
+
 	if err := c.ActivateSession(s); err != nil {
-		_ = c.Close()
+		c.Close()
 		return err
 	}
 	c.state.Store(Connected)
@@ -206,6 +208,13 @@ func (c *Client) Connect(ctx context.Context) (err error) {
 		go c.monitor(mctx)
 		go c.monitorSubscriptions(mctx)
 	})
+
+	if !c.cfg.disableNamespaceUpdate {
+		if err := c.UpdateNamespaces(); err != nil {
+			c.Close()
+			return err
+		}
+	}
 
 	return nil
 }
@@ -500,10 +509,6 @@ func (c *Client) Dial(ctx context.Context) error {
 	if err := c.sechan.Open(ctx); err != nil {
 		c.conn.Close()
 		return err
-	}
-
-	if !c.cfg.disableNamespaceUpdate {
-		return c.UpdateNamespaces()
 	}
 
 	return nil
