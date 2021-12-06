@@ -998,7 +998,7 @@ func (c *Client) NamespaceArray() ([]string, error) {
 	return ns, nil
 }
 
-// UpdateNamespaces updates the cached list of namespaces from the server.
+// UpdateNamespaces updates the list of cached namespaces from the server.
 func (c *Client) UpdateNamespaces() error {
 	ns, err := c.NamespaceArray()
 	if err != nil {
