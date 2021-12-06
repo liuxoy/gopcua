@@ -75,10 +75,11 @@ func (e *ExtensionObject) Decode(b []byte) (int, error) {
 	typeID := e.TypeID.NodeID
 	e.Value = eotypes.New(typeID)
 	if e.Value == nil {
-		return buf.Pos(), buf.Error()
+		// return buf.Pos(), buf.Error()
+		body.ReadN(int(length))
+	} else {
+	      body.ReadStruct(e.Value)
 	}
-
-	body.ReadStruct(e.Value)
 	return buf.Pos(), body.Error()
 }
 
